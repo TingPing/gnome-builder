@@ -721,22 +721,22 @@ ide_run_manager_discover_default_target_cb (GObject      *object,
                                             GAsyncResult *result,
                                             gpointer      user_data)
 {
-  IdeBuildSystem *build_system = (IdeBuildSystem *)object;
+  IdeBuilder *builder = (IdeBuilder *)object;
   g_autoptr(GTask) task = user_data;
   g_autoptr(GPtrArray) targets = NULL;
+  g_autoptr(GError) error = NULL;
   IdeBuildTarget *best_match;
-  GError *error = NULL;
 
   IDE_ENTRY;
 
-  g_assert (IDE_IS_BUILD_SYSTEM (build_system));
+  g_assert (IDE_IS_BUILDER (builder));
   g_assert (G_IS_ASYNC_RESULT (result));
 
-  targets = ide_build_system_get_build_targets_finish (build_system, result, &error);
+  targets = ide_builder_get_build_targets_finish (builder, result, &error);
 
   if (targets == NULL)
     {
-      g_task_return_error (task, error);
+      g_task_return_error (task, g_steal_pointer (&error));
       IDE_EXIT;
     }
 
@@ -763,6 +763,10 @@ ide_run_manager_discover_default_target_async (IdeRunManager       *self,
                                                gpointer             user_data)
 {
   g_autoptr(GTask) task = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autoptr(IdeBuilder) builder = NULL;
+  IdeConfigurationManager *config_manager;
+  IdeConfiguration *config;
   IdeBuildSystem *build_system;
   IdeContext *context;
 
@@ -776,11 +780,22 @@ ide_run_manager_discover_default_target_async (IdeRunManager       *self,
 
   context = ide_object_get_context (IDE_OBJECT (self));
   build_system = ide_context_get_build_system (context);
+  config_manager = ide_context_get_configuration_manager (context);
 
-  ide_build_system_get_build_targets_async (build_system,
-                                            cancellable,
-                                            ide_run_manager_discover_default_target_cb,
-                                            g_object_ref (task));
+  config = ide_configuration_manager_get_current (config_manager);
+
+  builder = ide_build_system_get_builder (build_system, config, &error);
+
+  if (builder == NULL)
+    {
+      g_task_return_error (task, g_steal_pointer (&error));
+      IDE_EXIT;
+    }
+
+  ide_builder_get_build_targets_async (builder,
+                                       cancellable,
+                                       ide_run_manager_discover_default_target_cb,
+                                       g_steal_pointer (&task));
 
   IDE_EXIT;
 }

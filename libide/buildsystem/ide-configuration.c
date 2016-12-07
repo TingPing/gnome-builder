@@ -941,6 +941,7 @@ ide_configuration_duplicate (IdeConfiguration *self)
                        "runtime-id", self->runtime_id,
                        NULL);
 
+  copy->sequence = self->sequence;
   copy->environment = ide_environment_copy (self->environment);
 
   if (self->prebuild)
